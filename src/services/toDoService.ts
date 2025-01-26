@@ -1,43 +1,68 @@
-import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot, getFirestore } from 'firebase/firestore';
-import { db } from '@/environments/environment';
 import { Todo } from '@/models/toDo.model';
 
-// this is a firestore collection reference
-const todosCollectionRef = collection(db, 'todos');
+const API_URL = 'http://localhost:5001/api/todos';
 
+const fetchConfig = {
+  credentials: 'include' as RequestCredentials,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+};
 
-// Subscribe to Firestore updates in real-time
+// Fetch all todos
 export const subscribeTodos = (callback: (todos: Todo[]) => void) => {
-  return onSnapshot(todosCollectionRef, (snapshot) => {
-    const todos = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Todo[];
-    callback(todos.reverse());
-  });
+  const fetchTodos = async () => {
+    try {
+      const response = await fetch(API_URL, {
+        ...fetchConfig,
+        method: 'GET'
+      });
+      if (!response.ok) throw new Error('Failed to fetch todos');
+      const todos = await response.json();
+      callback(todos.reverse());
+    } catch (error) {
+      console.error('Error fetching todos:', error);
+      throw error;
+    }
+  };
+  fetchTodos();
+  return () => {}; // No real-time updates, so return a no-op function
 };
 
 // Add a new todo
 export const addTodo = async (title: string) => {
   if (!title.trim()) throw new Error("Title cannot be empty");
 
-  const newTodo = {
-    title: title.trim(),
-    completed: false,
-  };
-
-  const docRef = await addDoc(todosCollectionRef, newTodo);
-  return docRef.id;
+  const response = await fetch(API_URL, {
+    ...fetchConfig,
+    method: 'POST',
+    body: JSON.stringify({
+      title: title.trim(),
+      completed: false,
+    }),
+  });
+  
+  if (!response.ok) throw new Error('Failed to add todo');
+  return await response.json();
 };
 
 // Toggle todo completed status
 export const toggleTodo = async (id: string, completed: boolean) => {
-  const todoRef = doc(db, 'todos', id);
-  await updateDoc(todoRef, { completed });
+  const response = await fetch(`${API_URL}/${id}`, {
+    ...fetchConfig,
+    method: 'PUT',
+    body: JSON.stringify({ completed }),
+  });
+  
+  if (!response.ok) throw new Error('Failed to update todo');
 };
 
 // Delete a todo
 export const deleteTodo = async (id: string) => {
-  const todoRef = doc(db, 'todos', id);
-  await deleteDoc(todoRef);
+  const response = await fetch(`${API_URL}/${id}`, {
+    ...fetchConfig,
+    method: 'DELETE',
+  });
+  
+  if (!response.ok) throw new Error('Failed to delete todo');
 };
