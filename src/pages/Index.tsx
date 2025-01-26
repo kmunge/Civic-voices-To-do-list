@@ -2,11 +2,10 @@ import { useEffect, useState } from "react";
 import { TodoItem } from "@/components/TodoItem";
 import { TodoInput } from "@/components/TodoInput";
 import { useToast } from "@/components/ui/use-toast";
-import { subscribeTodos, addTodo, toggleTodo, deleteTodo } from "@/services/toDoService";
+import { subscribeTodos,addTodo,toggleTodo,deleteTodo} from "@/services/toDoService";
 import { Todo } from "@/models/toDo.model";
 
 const Index = () => {
-  
   const [todos, setTodos] = useState<Todo[]>([]);
   const { toast } = useToast();
 
@@ -15,18 +14,21 @@ const Index = () => {
     // The `subscribeTodos` function listens for changes in the 'todos' collection 
     // and updates the local state with the latest data whenever changes occur.
     // The callback function `setTodos` updates the state with the received todos.
-    const unsubscribe = subscribeTodos((updatedTodos) => {
-      setTodos(updatedTodos);
-    });
-    // Cleanup function: Unsubscribes from Firestore updates when the component unmounts,
-    // preventing memory leaks and unnecessary re-renders.
-    return () => unsubscribe();
+    const unsubscribe = subscribeTodos(setTodos);
+
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe(); // Ensure cleanup actually unsubscribes
+      }
+    };
   }, []);
 
-  //to add a new todo
+  // Add a new todo with optimistic UI update
   const handleAddTodo = async (title: string) => {
     try {
-      await addTodo(title);
+      const newTodo = await addTodo(title);
+
+      setTodos((prevTodos) => [newTodo, ...prevTodos]); // Optimistic update
       toast({
         title: "Todo added",
         description: "Your new todo has been added successfully",
@@ -34,31 +36,38 @@ const Index = () => {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to add todo",
+        description:
+          error instanceof Error ? error.message : "Failed to add todo",
         variant: "destructive",
       });
     }
   };
 
-  //to toggle a todo
+  // Toggle a todo's completed status
   const handleToggleTodo = async (id: string) => {
     const todo = todos.find((t) => t.id === id);
     if (todo) {
       try {
+        const updatedTodos = todos.map((t) =>
+          t.id === id ? { ...t, completed: !t.completed } : t
+        );
+        setTodos(updatedTodos); // Optimistic update
         await toggleTodo(id, !todo.completed);
       } catch (error) {
         toast({
           title: "Error",
-          description: "Failed to update todo",
+          description:
+            error instanceof Error ? error.message : "Failed to update todo",
           variant: "destructive",
         });
       }
     }
   };
 
-  //to delete a todo
+  // Delete a todo with optimistic UI update
   const handleDeleteTodo = async (id: string) => {
     try {
+      setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== id)); // Optimistic update
       await deleteTodo(id);
       toast({
         title: "Todo deleted",
@@ -67,7 +76,8 @@ const Index = () => {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to delete todo",
+        description:
+          error instanceof Error ? error.message : "Failed to delete todo",
         variant: "destructive",
       });
     }
